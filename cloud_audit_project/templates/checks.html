@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/checks.css') }}">
+    <title>Checks</title>
+    <style>
+        .modal {
+            display: none; 
+            position: fixed; 
+            z-index: 1; 
+            left: 0;
+            top: 0;
+            width: 100%; 
+            height: 100%; 
+            overflow: auto; 
+            background-color: rgb(0,0,0); 
+            background-color: rgba(0,0,0,0.4); 
+            padding-top: 60px;
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 40%; 
+        }
+
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+    </style>
+
+    <script>
+        function openAddAccountModal() {
+            document.getElementById('awsAccountForm').reset();
+            document.getElementById("addAccountModal").style.display = "block";
+        }
+        
+        function closeModal() {
+            document.getElementById("addAccountModal").style.display = "none";
+        }
+    </script>
+</head>
+<body>
+    <div class="top-section">
+    <h1 class="page-title">Cloud Audit Checks</h1>
+
+    <div class="top-bar-container">
+        <div class="default-region-dropdown">
+            <label for="defaultRegionDropdown">Select Default AWS Region:</label>
+            <select id="defaultRegionDropdown" name="default_region" form="runCheckForm">
+                {% for region in regions %}
+                <option value="{{ region }}">{{ region }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    
+        <div class="top-right-aws-dropdown">
+            <label for="awsAccountsDropdown">Linked AWS Accounts:</label>
+            <select id="awsAccountsDropdown">
+                {% for account in aws_accounts %}
+                <option value="{{ account.account_id }}">{{ account.account_name }} {% if account.is_default %}(Default){% endif %}</option>
+                {% endfor %}
+            </select>
+            <span class="add-account-btn" onclick="openAddAccountModal()">&#43;</span>
+        </div>
+    </div>
+    </div>
+
+    <div class="filter-container">
+        <input type="text" id="searchInput" placeholder="Search checks by name..." onkeyup="filterTable()">
+        
+        <select id="serviceFilter" onchange="filterTable()">
+            <option value="">No Filter (All Services)</option>
+            {% for service in services %}
+            <option value="{{ service }}">{{ service }}</option>
+            {% endfor %}
+        </select>
+        
+        <select id="sourcesFilter" onchange="filterTable()">
+            <option value="">No Filter (All Ratings)</option>
+            {% for source in  sources %}
+            <option value="{{ source }}">{{ source }}</option>
+            {% endfor %}
+        </select>
+
+        <select id="statusFilter" onchange="filterTable()">
+            <option value="">No Filter (All Statuses)</option>
+            <option value="Pending">Pending</option>
+            <option value="Pass">Pass</option>
+            <option value="Fail">Fail</option>
+        </select>
+    </div>
+
+    <div id="addAccountModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2>Add New AWS Account</h2>
+            <form id="awsAccountForm" onsubmit="submitAWSAccount(event)">
+                <label for="account_name">Account Name:</label>
+                <input type="text" id="account_name" name="account_name" required>
+    
+                <label for="access_key">Access Key ID:</label>
+                <input type="text" id="access_key" name="access_key" required>
+    
+                <label for="secret_key">Secret Key:</label>
+                <input type="password" id="secret_key" name="secret_key" required>
+    
+                <label for="default_account">Set as default:</label>
+                <input type="checkbox" id="default_account" name="is_default">
+    
+                <button type="submit">Submit</button>
+                <button type="button" onclick="closeModal()">Cancel</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+
+        function submitAWSAccount(event) {
+            event.preventDefault();
+        
+            const formData = new FormData(document.getElementById('awsAccountForm'));
+
+            fetch('/add_aws_account', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateAWSAccountsList(data.aws_accounts);
+                    updateAWSAccountDropdowns(data.aws_accounts);
+                    closeModal();
+                } else {
+                    alert('Failed to add AWS account');
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        function updateAWSAccountDropdowns(accounts) {
+            const awsAccountDropdowns = document.querySelectorAll('.awsAccountDropdown');
+            let defaultAccountId = null;
+
+            accounts.forEach(account => {
+                if (account.is_default === true) {
+                    defaultAccountId = account.account_id; 
+                }
+            });
+
+
+            awsAccountDropdowns.forEach(dropdown => {
+                dropdown.innerHTML = '';
+
+                accounts.forEach(account => {
+                    const option = document.createElement('option');
+                    option.value = account.account_id;
+                    option.textContent = account.account_name;
+                    if (account.account_id === defaultAccountId) {
+                        option.selected = true;
+                        option.textContent += " (Default)";
+                    }
+                    dropdown.appendChild(option);
+                });
+            });
+        }
+        
+        function updateAWSAccountsList(accounts) {
+            const awsAccountsDropdown = document.getElementById('awsAccountsDropdown');
+            awsAccountsDropdown.innerHTML = ''; 
+
+            let defaultAccountId = null;
+
+            accounts.forEach(account => {
+                if (account.is_default === true) {
+                    defaultAccountId = account.account_id; 
+                }
+            });
+
+
+            accounts.forEach(account => {
+                const option = document.createElement('option');
+                option.value = account.account_id; 
+                option.textContent = account.account_name + (account.is_default ? ' (Default)' : ''); 
+
+                if (account.is_default) {
+                    option.selected = true;
+                }
+
+                awsAccountsDropdown.appendChild(option); 
+            });
+        }
+        function filterTable() {
+    var searchInput = document.getElementById("searchInput").value.toUpperCase();
+    var serviceFilter = document.getElementById("serviceFilter").value;
+    var sourcesFilter = document.getElementById("sourcesFilter").value;
+    var statusFilter = document.getElementById("statusFilter").value;
+
+    var table = document.getElementById("checksTable");
+    var tr = table.getElementsByTagName("tr");
+
+    for (var i = 1; i < tr.length; i++) { 
+        var tdService = tr[i].getElementsByTagName("td")[1]; 
+        var tdSources = tr[i].getElementsByTagName("td")[2];  
+        var tdName = tr[i].getElementsByTagName("td")[3];
+        var tdStatus = tr[i].getElementsByTagName("td")[9];
+
+        if (tdService && tdSources && tdName && tdStatus) {
+            var serviceValue = tdService.textContent || tdService.innerText;
+            var sourcesValue = tdSources.textContent || tdSources.innerText;
+            var nameValue = tdName.textContent || tdName.innerText;
+            var statusValue = tdStatus.textContent || tdStatus.innerText;
+
+            if (
+                (nameValue.toUpperCase().indexOf(searchInput) > -1 || searchInput === "") &&
+                (serviceValue === serviceFilter || serviceFilter === "") &&
+                (sourcesValue === sourcesFilter || sourcesFilter === "") &&
+                (statusValue === statusFilter || statusFilter === "")
+            ) {
+                tr[i].style.display = ""; 
+            } else {
+                tr[i].style.display = "none"; 
+            }
+        }
+    }
+}
+
+
+
+        </script>
+        
+    
+        <br>
+    <form id="runCheckForm" onsubmit="submitRunCheck(event)">
+        <table id="checksTable">
+            <tr>
+                <th style="font-size: large;">S.No</th>
+                <th style="font-size: large;">Service Name</th>
+                <th style="font-size: large;">Source</th>
+                <th style="font-size: large;">Check Name</th>
+                <th style="word-wrap: break-word;font-size: large;">Check Description</th>
+                <th style="font-size: large;">CLI Command</th>
+                <th style="font-size: large;">AWS Account</th>
+                <th style="font-size: large;">AWS Region</th>
+                <th style="font-size: large;">Run</th>
+                <th style="font-size: large;">Status</th>
+            </tr>
+            {% for check in checks %}
+            <tr>
+                <td style="font-weight: 600;">{{ check.check_id }}</td>
+                <td style="font-weight: 600;">{{ check.service_name }}</td>
+                <td style="font-weight: 600;">{{ check.sources }}</td>
+                <td style="font-weight: 600;">{{ check.check_name }}</td>
+                <td>{{ check.check_description }}</td>
+                <td><code>{{ check.cli_command }}</code></td>
+                <td>
+                    <select name="aws_account" class="awsAccountDropdown">
+                        {% for account in aws_accounts %}
+                        <option value="{{ account.account_id }}">{{ account.account_name }}</option>
+                        {% endfor %}
+                    </select>
+                </td>
+                <td>
+                    <select name="region_{{ check.check_id }}">
+                        <option value="">(Use Default Region)</option>
+                        {% for region in regions %}
+                        <option value="{{ region }}">{{ region }}</option>
+                        {% endfor %}
+                    </select>
+                </td>
+                <td>
+                    <button type="submit" name="s_no" value="{{ check.check_id }}">Run</button>
+                </td>
+                <td id="status-{{ check.check_id }}" class="status pending">Pending</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </form>
+
+    
+    
+    
+    <script>
+        function submitRunCheck(event) {
+    event.preventDefault();
+
+    const formData = new FormData(document.getElementById('runCheckForm'));
+
+    const s_no = event.submitter.value;
+    formData.append('s_no', s_no); 
+
+    fetch('/run_check', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        const statusCell = document.getElementById(`status-${s_no}`);
+        
+        if (data.success) {
+            statusCell.innerHTML = data.result;  
+            
+            statusCell.classList.remove('success', 'failure', 'pending');
+            
+            if (data.result === 'Pass') {
+                statusCell.classList.add('success');
+            } else {
+                statusCell.classList.add('failure');
+            }
+        } else {
+            statusCell.innerHTML = "Failed";
+            statusCell.classList.remove('success', 'pending');
+            statusCell.classList.add('failure');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        const statusCell = document.getElementById(`status-${s_no}`);
+        statusCell.innerHTML = "Error"; 
+        statusCell.classList.remove('success', 'pending');
+        statusCell.classList.add('failure');
+    });
+}
+
+        </script>
+        
+        
+</body>
+</html>

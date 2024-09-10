@@ -1,8 +1,10 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask import Flask, render_template, request, redirect, url_for, jsonify, session # type: ignore
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 import pytz
 from check_functions import *
+from auth import auth_bp, login_required
+from oauth import oauth
 
 app = Flask(__name__)
 
@@ -48,8 +50,14 @@ check_functions_map = {
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:toor@127.0.0.1:3306/cloud_checks'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.secret_key = 'this_is_top_secret'
+
+
+oauth.init_app(app)
 
 db = SQLAlchemy(app)
+
+app.register_blueprint(auth_bp)
 
 regions = [
     'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2', 
@@ -87,8 +95,16 @@ def log_command(s_no, command, account_name, region, status):
     with open("log.txt", "a") as log_file:
         log_file.write(f"[{timestamp}] Check No: {s_no} [{command}] [{region}] [{account_name}] [{status}]\n")
 
-@app.route('/', methods=['GET'])
+
+@app.route('/')
 def index():
+    if 'jwt_token' in session:
+        return redirect(url_for('dashboard'))
+    return render_template('login.html')
+
+@app.route('/dashboard', methods=['GET'])
+@login_required
+def dashboard():
     aws_accounts = AWSCredentials.query.all() 
     default_account = AWSCredentials.query.filter_by(is_default=True).first()
 
@@ -99,6 +115,7 @@ def index():
     return render_template('checks.html', checks=checks, aws_accounts=aws_accounts, default_account=default_account, regions=regions, services=unique_services, sources = unique_sources)
 
 @app.route('/add_aws_account', methods=['POST'])
+@login_required
 def add_aws_account():
     account_name = request.form['account_name']
     access_key = request.form['access_key']
@@ -120,6 +137,7 @@ def add_aws_account():
     return jsonify(success=True, aws_accounts=accounts_data)
 
 @app.route('/run_check', methods=['POST'])
+@login_required
 def run_check():
     s_no = request.form['s_no']
     account_index = request.form['aws_account']
@@ -153,6 +171,10 @@ def run_check():
     except Exception as e:
         return jsonify(success=False, message=str(e))
 
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('index'))
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -41,6 +41,31 @@
             text-decoration: none;
             cursor: pointer;
         }
+
+        .top-bar {
+            background-color: #ffffff;
+            padding: 15px;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+        }
+
+        .logout-btn {
+            background-color: #ff4b4b;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+            margin-bottom: -20px;
+        }
+
+        .logout-btn:hover {
+            background-color: #e04040;
+        }
+
     </style>
 
     <script>
@@ -53,9 +78,50 @@
             document.getElementById("addAccountModal").style.display = "none";
         }
     </script>
+
+    
 </head>
 <body>
+    <script>
+        window.onload = function() {
+
+           
+document.getElementById("defaultRegionDropdown").addEventListener("change", function() {
+    const selectedRegion = this.value;
+    const regionDropdowns = document.querySelectorAll('select[name^="region_"]'); 
+
+    regionDropdowns.forEach(function(dropdown) {
+        const options = dropdown.options; 
+
+        for (let i = 0; i < options.length; i++) {
+            if (options[i].value === selectedRegion) { 
+                dropdown.selectedIndex = i;
+                console.log("Updated region for:", dropdown.name, "to", selectedRegion); 
+                break;
+            }
+        }
+    });
+});
+
+
+
+
+document.getElementById("awsAccountsDropdown").addEventListener("change", function() {
+    const selectedAccount = this.value;
+    const accountDropdowns = document.querySelectorAll('.awsAccountDropdown');
+
+    accountDropdowns.forEach(function(dropdown) {
+        dropdown.value = selectedAccount;
+        console.log("Updated AWS account for check:", dropdown.name);
+    });
+});
+}
+
+    </script>
     <div class="top-section">
+        <div class="top-bar">
+            <button class="logout-btn" onclick="window.location.href='/logout'">Logout</button>
+        </div>
     <h1 class="page-title">Cloud Audit Checks</h1>
 
     <div class="top-bar-container">
@@ -77,6 +143,7 @@
             </select>
             <span class="add-account-btn" onclick="openAddAccountModal()">&#43;</span>
         </div>
+        
     </div>
     </div>
 
@@ -103,7 +170,39 @@
             <option value="Pass">Pass</option>
             <option value="Fail">Fail</option>
         </select>
+        <button id="downloadCsvBtn">Export Below Filtered Table</button>
     </div>
+    <script>
+        document.getElementById('downloadCsvBtn').addEventListener('click', function () {
+            let table = document.getElementById('checksTable');
+            let rows = table.querySelectorAll('tr');
+            let csv = [];
+        
+            for (let i = 0; i < rows.length; i++) {
+                let row = rows[i];
+                if (row.style.display !== "none") { 
+                    let cols = row.querySelectorAll('td, th'); 
+                    let rowData = [];
+        
+                    for (let j = 0; j < cols.length; j++) {
+                        rowData.push(cols[j].innerText.trim());
+                    }
+        
+                    csv.push(rowData.join(','));
+                }
+            }
+        
+            let csvString = csv.join('\n');
+        
+            let downloadLink = document.createElement('a');
+            downloadLink.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvString);
+            downloadLink.target = '_blank';
+            downloadLink.download = 'filtered_table.csv'; 
+        
+            downloadLink.click();
+        });
+        
+            </script>
 
     <div id="addAccountModal" class="modal">
         <div class="modal-content">
